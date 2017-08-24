@@ -3,10 +3,58 @@
 # Simple wrapper to the `cloc` script to enable analysis
 # of lines of code between git branches in drake.
 
+# For tab complete, you must have argcomplete installed:
+#  https://pypi.python.org/pypi/argcomplete
+
 import numpy as np
-from optparse import OptionParser
 import re
 import subprocess
+
+def get_branches(prefix, **kwargs):
+    '''List the local branches in the git repository'''
+    try:
+        output = subprocess.check_output(['git', 
+                                          'branch',
+                                          '-l'])
+        branches = [ b.strip('* ') for b in output.split('\n') if b]
+        if (prefix):
+            branches = filter(lambda x: x.startswith(prefix), branches)
+#        argcomplete.warn("Branches loaded:\n %s" % '\n'.join(branches))
+        return branches
+    except subprocess.CalledProcessError as e:
+        argcomplete.warn("Failed to get branches")
+        return []
+
+def use_arg_parser():
+    global parser
+    parsed = parser.parse_args()
+    if (parsed.commit2 is None):
+        return (parsed.commit1, )
+    else:
+        return (parsed.commit1, parsed.commit2)
+
+def use_option_parser():
+    parser = OptionParser()
+    options, args = parser.parse_args()
+    return args
+
+try:
+    import argcomplete, argparse
+    parser = argparse.ArgumentParser()
+    a = parser.add_argument('-t').choices = ['one', 'two', 'three']
+    arg1 = parser.add_argument('commit1', type=str,
+                               help='The base commit to compare against')
+    arg1.completer = get_branches
+    parser.add_argument('commit2', type=str, nargs='?',
+                        help='The commit to compare against the base commit. ' +
+                        'If omitted, then commit1 will be compared against ' +
+                        'master.').completer = get_branches
+    argcomplete.autocomplete(parser)
+    parse = use_arg_parser
+
+except ImportError:
+    from optparse import OptionParser
+    parse = use_option_parser
 
 class Count:
     '''The counts of modifications'''
@@ -201,13 +249,9 @@ def run_cloc(args):
     return True
 
 def main():
-    parser = OptionParser()
+    args = parse()
 
-    options, args = parser.parse_args()
-
-    if not run_cloc(args):
-        print
-        parser.print_help()
+    run_cloc(args)
 
 if __name__ == '__main__':
     main()

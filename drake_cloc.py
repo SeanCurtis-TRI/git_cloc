@@ -19,7 +19,6 @@ def get_branches(prefix, **kwargs):
         branches = [ b.strip('* ') for b in output.split('\n') if b]
         if (prefix):
             branches = filter(lambda x: x.startswith(prefix), branches)
-#        argcomplete.warn("Branches loaded:\n %s" % '\n'.join(branches))
         return branches
     except subprocess.CalledProcessError as e:
         argcomplete.warn("Failed to get branches")
@@ -41,7 +40,6 @@ def use_option_parser():
 try:
     import argcomplete, argparse
     parser = argparse.ArgumentParser()
-    a = parser.add_argument('-t').choices = ['one', 'two', 'three']
     arg1 = parser.add_argument('commit1', type=str,
                                help='The base commit to compare against')
     arg1.completer = get_branches

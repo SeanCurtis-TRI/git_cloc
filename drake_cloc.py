@@ -3,6 +3,7 @@
 # Simple wrapper to the `cloc` script to enable analysis
 # of lines of code between git branches in drake.
 
+import numpy as np
 from optparse import OptionParser
 import re
 import subprocess
@@ -109,6 +110,37 @@ def parse_cloc_output(console_output):
     files.sort()
     return files
 
+def summary_table(files):
+    '''Prints a summary of changes by modification type.
+    Difference    added  modified   removed
+    ---------------------------------------
+    code          x1     x2         x3
+    comments      y1     y2         y3
+    blank         z1     z2         z3
+    '''
+    data = np.zeros((3, 3), dtype=np.int)
+
+    def update_category(table, row, count):
+        table[row, 0] += count.added
+        table[row, 1] += count.modified
+        table[row, 2] += count.removed
+    for f in files:
+        update_category(data, 0, f.code)
+        update_category(data, 1, f.comment)
+        update_category(data, 2, f.blank)
+        
+    row_format = '{0:<20}{1:<7}{2:<10}{3:<9}'
+    header = row_format.format('Category', 'added', 'modified', 'removed')
+    divider = '-' * len(header)
+    print header
+    print divider
+    labels = ('code', 'comments', 'blank')
+    for i, label in enumerate(labels):
+        print row_format.format(label, data[i, 0], data[i, 1], data[i, 2])
+    totals = np.sum(data, axis=0)
+    print divider
+    print row_format.format('TOTAL', totals[0], totals[1], totals[2])
+     
 def print_table(files):
     '''Given a list of files, prints out a table'''
     SPACE = 2
@@ -150,7 +182,7 @@ def run_cloc(args):
     else:
         src_hash, dst_hash = args
 
-    print "Computing difference between '%s' and '%s'." % (src_hash, dst_hash)
+    print "Computing difference between '%s' and '%s'.\n" % (src_hash, dst_hash)
 
     try:
         output = subprocess.check_output(['cloc', 
@@ -165,7 +197,7 @@ def run_cloc(args):
         return False
 
     file_counts = parse_cloc_output(output)
-    print_table(file_counts)
+    summary_table(file_counts)
     return True
 
 def main():

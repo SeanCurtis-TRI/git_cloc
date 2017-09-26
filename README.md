@@ -30,13 +30,16 @@ If it isn't getting sourced in new terminals create the file:
 
 and add the following line:
 
-`. /etx/bash_completion.d/git_cloc.sh`
+`. /etc/bash_completion.d/git_cloc.sh`
 
 
 Prerequisites
 -------------
 
-This uses Python 2.7 with a non-built-in module: argcomplete. To install simply:
-   pip install argcomplete
+- This uses Python 2.7.
+- It uses the module `argcomplete`. To install:
+  `pip install argcomplete`
+- It makes use of the cloc project which can be cloned from here:
+   https://github.com/AlDanial/cloc
 
 

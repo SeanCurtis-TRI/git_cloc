@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# PYTHON_ARGCOMPLETE_OK
 
 # Simple wrapper to the `cloc` script to enable analysis
 # of lines of code between git branches in drake.
@@ -10,49 +11,22 @@ import numpy as np
 import re
 import subprocess
 
-def get_branches(prefix, **kwargs):
-    '''List the local branches in the git repository'''
+def subshell(cmd, suppress_error=False, strip=True):
     try:
-        output = subprocess.check_output(['git', 
-                                          'branch',
-                                          '-l'])
-        branches = [ b.strip('* ') for b in output.split('\n') if b]
-        if (prefix):
-            branches = filter(lambda x: x.startswith(prefix), branches)
-        return branches
+        if isinstance(cmd, list):
+            output = subprocess.check_output(cmd)
+        else:
+            assert isinstance(cmd, str)
+            output = subprocess.check_output(cmd, shell=True)
     except subprocess.CalledProcessError as e:
-        argcomplete.warn("Failed to get branches")
-        return []
-
-def use_arg_parser():
-    global parser
-    parsed = parser.parse_args()
-    if (parsed.commit2 is None):
-        return (parsed.commit1, )
+        if suppress_error:
+            return None
+        else:
+            raise e
+    if strip:
+        return output.strip()
     else:
-        return (parsed.commit1, parsed.commit2)
-
-def use_option_parser():
-    parser = OptionParser()
-    options, args = parser.parse_args()
-    return args
-
-try:
-    import argcomplete, argparse
-    parser = argparse.ArgumentParser()
-    arg1 = parser.add_argument('commit1', type=str,
-                               help='The base commit to compare against')
-    arg1.completer = get_branches
-    parser.add_argument('commit2', type=str, nargs='?',
-                        help='The commit to compare against the base commit. ' +
-                        'If omitted, then commit1 will be compared against ' +
-                        'master.').completer = get_branches
-    argcomplete.autocomplete(parser)
-    parse = use_arg_parser
-
-except ImportError:
-    from optparse import OptionParser
-    parse = use_option_parser
+        return output
 
 class Count:
     '''The counts of modifications'''
@@ -108,7 +82,7 @@ class FileCount:
 
     def blank_count(self):
         return int(self.blank)
-    
+
     def comment_count(self):
         return int(self.comment)
 
@@ -128,12 +102,12 @@ def parse_cloc_output(console_output):
     files = []
     for line in lines:
         line = line.strip()
-        if (divider_re.match(line)): continue
-
-        if (state == START):
-            if (file_header_re.match(line)):
+        if divider_re.match(line):
+            continue
+        if state == START:
+            if file_header_re.match(line):
                 state = FILES
-        elif (state == FILES):
+        elif state == FILES:
             m = count_re.match(line)
             if m:
                 # udpate counts in current file count
@@ -142,14 +116,14 @@ def parse_cloc_output(console_output):
                 comment_count = int(m.group(3))
                 code_count = int(m.group(4))
                 file = files[-1]
-                if (category == 'modified'):
+                if category == 'modified':
                     file.modified(code_count, comment_count, blank_count)
-                elif (category == 'added'):
+                elif category == 'added':
                     file.added(code_count, comment_count, blank_count)
-                elif (category == 'removed'):
+                elif category == 'removed':
                     file.removed(code_count, comment_count, blank_count)
             else:
-                if (sum_header_re.match(line)): break
+                if sum_header_re.match(line): break
                 else:
                     # create new file count
                     files.append(FileCount(line))
@@ -174,7 +148,7 @@ def summary_table(files):
         update_category(data, 0, f.code)
         update_category(data, 1, f.comment)
         update_category(data, 2, f.blank)
-        
+
     row_format = '{0:<20}{1:<7}{2:<10}{3:<9}'
     header = row_format.format('Category', 'added', 'modified', 'removed')
     divider = '-' * len(header)
@@ -186,7 +160,7 @@ def summary_table(files):
     totals = np.sum(data, axis=0)
     print divider
     print row_format.format('TOTAL', totals[0], totals[1], totals[2])
-     
+
 def print_table(files):
     '''Given a list of files, prints out a table'''
     SPACE = 2
@@ -213,43 +187,90 @@ def print_table(files):
                                 f.code_count(),
                                 f.comment_count(),
                                 f.blank_count())
-    
-def run_cloc(args):
-    '''Runs cloc on the arguments'''
-    if (len(args) < 1):
-        print "No git commits provided"
-        return False
-    elif (len(args) > 2):
-        print "Too many arguments provided"
-        return False
-    elif (len(args) < 2):
-        src_hash = 'master'
-        dst_hash = args[0]
+
+def friendly_commit(commit, name=None):
+    ''' Format as "name (sha)" '''
+    sha = subshell('git rev-parse --short {}'.format(commit))
+    if name:
+        order = (name, sha)
     else:
-        src_hash, dst_hash = args
+        order = ("'{}'".format(commit), sha)
+    return "{} ({})".format(*order)
 
-    print "Computing difference between '%s' and '%s'.\n" % (src_hash, dst_hash)
+def run_cloc(commits):
+    '''Runs cloc on the arguments'''
+    assert len(commits) <= 2
+    src_commit = None
+    src_name = None
+    if len(commits) == 0:
+        src_commit = None
+        dst_commit = 'HEAD'
+    elif len(commits) == 1:
+        src_commit = None
+        dst_commit = commits[0]
+    else:
+        src_commit, dst_commit = commits
+    if src_commit is None:
+        cmd = 'git merge-base master {}'.format(dst_commit)
+        src_commit = subshell(cmd)
+        src_name = "$({})".format(cmd)
 
-    try:
-        output = subprocess.check_output(['cloc', 
-                                          '--lang-no-ext=Python', 
-                                          '--by-file',
-                                          '--git', 
-                                          '--diff', 
-                                          src_hash, 
-                                          dst_hash])
-    except subprocess.CalledProcessError as e:
-        print e
-        return False
+    print("Computing difference between %s and %s.\n"
+          % (friendly_commit(src_commit, src_name),
+             friendly_commit(dst_commit)))
+
+    output = subshell([
+        'cloc', '--lang-no-ext=Python', '--by-file',
+        '--git', '--diff', src_commit,  dst_commit])
 
     file_counts = parse_cloc_output(output)
     summary_table(file_counts)
-    return True
 
-def main():
-    args = parse()
 
-    run_cloc(args)
+def _arg_get_branches(prefix, **kwargs):
+    '''List the local branches in the git repository'''
+    # @ref https://stackoverflow.com/a/40122019/7829525
+    output = subshell("git for-each-ref --format='%(refname:short)' refs/heads",
+                      suppress_error=True)
+    if output is None:
+        argcomplete.warn("Failed to get branches")
+        return []
+    branches = [b.strip() for b in output.split('\n') if b]
+    if prefix:
+        branches = filter(lambda x: x.startswith(prefix), branches)
+    return branches
 
 if __name__ == '__main__':
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description="""
+This will produce a table comparing the adds/removes/modifies on the difference
+between two commits.
+
+The commits can be any normal git hash descriptor such as: branch names, tag
+names, commit values, relative commits, etc.
+""".strip())
+    parser.add_argument(
+        'commit1', type=str, nargs='?',
+        help='The base commit to compare against. If no commits are ' +
+             'provided, then HEAD will be compared to its merge-base with ' +
+             'master.'
+        ).completer = _arg_get_branches
+    parser.add_argument(
+        'commit2', type=str, nargs='?',
+        help='The commit to compare against the base commit. ' +
+             'If omitted, then commit1 will be compared against ' +
+             'its merge-base of master.'
+        ).completer = _arg_get_branches
+
+    # Provide argcomplete functionality if it is available.
+    try:
+        import argcomplete
+        argcomplete.autocomplete(parser)
+    except ImportError:
+        pass
+
+    parsed = parser.parse_args()
+    # Remove `None` elements.
+    commits = [commit for commit in [parsed.commit1, parsed.commit2] if commit]
+
+    run_cloc(commits)

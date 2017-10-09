@@ -40,9 +40,12 @@ Either in `/etc/bash_completion.d/*.sh`, `~/.bashrc`, or `~/.bash_aliases`, ensu
 Prerequisites
 -------------
 
-- This uses Python 2.7.
-- It uses the module `argcomplete`. Options to install:
-    - `pip install argcomplete`
-    - `sudo apt install python-argcomplete`
+- This uses Python 2.7 with the following modules:
+    - `numpy`
+    - `argcomplete`
+    - Options to install:
+      - `pip install MODULE_NAME`
+      - `sudo apt install python-MODULE_NAME`
 - It makes use of the `cloc` project which can be cloned from [https://github.com/AlDanial/cloc](https://github.com/AlDanial/cloc)
     - This must contain at least commit `cbd39bc`.
+    - It assumes that the `cloc` command is visible in the execution path.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # PYTHON_ARGCOMPLETE_OK
 
 # Simple wrapper to the `cloc` script to enable analysis
@@ -7,17 +7,20 @@
 # For tab complete, you must have argcomplete installed:
 #  https://pypi.python.org/pypi/argcomplete
 
-import numpy as np
+import functools
 import re
 import subprocess
+
+import numpy as np
+
 
 def subshell(cmd, suppress_error=False, strip=True):
     try:
         if isinstance(cmd, list):
-            output = subprocess.check_output(cmd)
+            output = subprocess.check_output(cmd, encoding="utf8")
         else:
             assert isinstance(cmd, str)
-            output = subprocess.check_output(cmd, shell=True)
+            output = subprocess.check_output(cmd, shell=True, encoding="utf8")
     except subprocess.CalledProcessError as e:
         if suppress_error:
             return None
@@ -27,6 +30,7 @@ def subshell(cmd, suppress_error=False, strip=True):
         return output.strip()
     else:
         return output
+
 
 class Count:
     '''The counts of modifications'''
@@ -38,6 +42,8 @@ class Count:
     def __int__(self):
         return self.added + self.modified + self.removed
 
+
+# @functools.total_ordering
 class FileCount:
     '''The count for a single file'''
     def __init__(self, file_name):
@@ -50,15 +56,12 @@ class FileCount:
         self.comment = Count()
         self.blank = Count()
 
-    def __cmp__(self, other):
-        return cmp(self.file_name, other.file_name)
+    def sorting_key(self):
+        return (self.file_name,)
 
     def __str__(self):
-        return '%s (%d, %d, %d)' % (self.file_name,
-                                    self.code,
-                                    self.comment,
-                                    self.blank)
-                                     
+        return f'{self.file_naeme} ({self.code}, {self.comment}, {self.blank})'
+
     def modified(self, code, comment, blank):
         '''Updates the modify counts with the given values'''
         self.code.modified += code
@@ -92,9 +95,9 @@ def parse_cloc_output(console_output):
     lines = console_output.split('\n')
     # regular expressions to catch lines.
     divider_re = re.compile('^-+$')
-    file_header_re = re.compile('File\s+blank\s+comment\s+code')
+    file_header_re = re.compile(r'File\s+blank\s+comment\s+code')
     sum_header_re = re.compile('SUM:')
-    count_re = re.compile('([a-z]+)\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)')
+    count_re = re.compile(r'([a-z]+)\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)')
     START = 0
     FILES = 1
     SUM = 2
@@ -127,7 +130,7 @@ def parse_cloc_output(console_output):
                 else:
                     # create new file count
                     files.append(FileCount(line))
-    files.sort()
+    files.sort(key=FileCount.sorting_key)
     return files
 
 def summary_table(files):
@@ -152,14 +155,14 @@ def summary_table(files):
     row_format = '{0:<20}{1:<7}{2:<10}{3:<9}'
     header = row_format.format('Category', 'added', 'modified', 'removed')
     divider = '-' * len(header)
-    print header
-    print divider
+    print(header)
+    print(divider)
     labels = ('code', 'comments', 'blank')
     for i, label in enumerate(labels):
-        print row_format.format(label, data[i, 0], data[i, 1], data[i, 2])
+        print(row_format.format(label, data[i, 0], data[i, 1], data[i, 2]))
     totals = np.sum(data, axis=0)
-    print divider
-    print row_format.format('TOTAL', totals[0], totals[1], totals[2])
+    print(divider)
+    print(row_format.format('TOTAL', totals[0], totals[1], totals[2]))
 
 def print_table(files):
     '''Given a list of files, prints out a table'''
@@ -168,25 +171,21 @@ def print_table(files):
     code_width = len('Code') + SPACE
     comment_width = len('Comment') + SPACE
     blank_width = len('Blank') + SPACE
-    col_format = ('| {{{{0:{{fill}}<{name_w}}}}}'
-                  '| {{{{1:{{fill}}<{code_w}}}}}'
-                  '| {{{{2:{{fill}}<{comment_w}}}}}'
-                  '| {{{{3:{{fill}}<{blank_w}}}}}|').format(
-                      name_w=name_width,
-                      code_w=code_width,
-                      comment_w=comment_width,
-                      blank_w=blank_width)
+    col_format = (f'| {{{{0:{{fill}}<{name_width}}}}}'
+                  f'| {{{{1:{{fill}}<{code_width}}}}}'
+                  f'| {{{{2:{{fill}}<{comment_width}}}}}'
+                  f'| {{{{3:{{fill}}<{blank_width}}}}}|')
     divider = col_format.format(fill='-')
     data_format = col_format.format(fill=' ')
 
-    print data_format.format('Files', 'Code', 'Comment', 'Blank')
-    print divider.format('', '', '', '')
+    print(data_format.format('Files', 'Code', 'Comment', 'Blank'))
+    print(divider.format('', '', '', ''))
     for f in files:
-        print data_format.format(
+        print(data_format.format(
                                 f.file_name,
                                 f.code_count(),
                                 f.comment_count(),
-                                f.blank_count())
+                                f.blank_count()))
 
 def friendly_commit(commit, name=None):
     ''' Format as "name (sha)" '''
@@ -211,13 +210,15 @@ def run_cloc(commits):
     else:
         src_commit, dst_commit = commits
     if src_commit is None:
-        cmd = 'git merge-base master {}'.format(dst_commit)
+        cmd = f'git merge-base master {dst_commit}'
         src_commit = subshell(cmd)
-        src_name = "$({})".format(cmd)
+        src_name = f"$({cmd})"
 
-    print("Computing difference between %s and %s.\n"
-          % (friendly_commit(src_commit, src_name),
-             friendly_commit(dst_commit)))
+    src_commit_friendly = friendly_commit(src_commit, src_name)
+    dst_commit_friendly = friendly_commit(dst_commit)
+    print(
+        f"Computing difference between {src_commit_friendly} and "
+        f"{dst_commit_friendly}.\n")
 
     output = subshell([
         'cloc', '--lang-no-ext=Python', '--by-file',

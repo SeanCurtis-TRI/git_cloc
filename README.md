@@ -29,7 +29,7 @@ Instructions
 
 In some bin directory in your `$PATH`:
 
-`ln -s $PATH_TO_GIT_CLOC/drake_cloc.py git_cloc`
+`ln -s $PATH_TO_GIT_CLOC/git_cloc git_cloc`
 
 Either in `/etc/bash_completion.d/*.sh`, `~/.bashrc`, or `~/.bash_aliases`, ensure that your shell will autocomplete your binary:
 
